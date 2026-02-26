@@ -1,8 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
-import { cn } from '@/lib/utils';
+import { cn, getBookSlug } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+
+/** Parse "John 3:16" or "1 Corinthians 13:4-7" into a reading link */
+function verseLink(ref: string): string | null {
+  const m = ref.match(/^(.+?)\s+(\d+):\d+/);
+  if (!m) return null;
+  return `/read/${getBookSlug(m[1])}/${m[2]}`;
+}
 import type { ChatMessage as ChatMessageType } from '@/types/chat';
 
 interface ChatMessageProps {
@@ -46,11 +54,18 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <div className="mt-2 pt-2 border-t border-dark-border">
             <p className="text-[10px] text-dark-muted mb-1">Sources:</p>
             <div className="flex flex-wrap gap-1">
-              {message.sources.map((s, i) => (
-                <span key={i} className="text-[10px] bg-gold/10 text-gold px-1.5 py-0.5 rounded">
-                  {s}
-                </span>
-              ))}
+              {message.sources.map((s, i) => {
+                const href = verseLink(s);
+                return href ? (
+                  <Link key={i} href={href} className="text-[10px] bg-gold/10 text-gold px-1.5 py-0.5 rounded hover:bg-gold/25 transition-colors">
+                    {s}
+                  </Link>
+                ) : (
+                  <span key={i} className="text-[10px] bg-gold/10 text-gold px-1.5 py-0.5 rounded">
+                    {s}
+                  </span>
+                );
+              })}
             </div>
           </div>
         )}
