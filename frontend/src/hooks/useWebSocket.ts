@@ -38,7 +38,8 @@ export function useWebSocket({ onMessage, onOpen, onClose }: UseWebSocketOptions
     }
 
     intentionalClose.current = false;
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? `ws://${window.location.host}/bible/api/chat`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/bible/api/chat`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
