@@ -14,6 +14,7 @@ export function useWebSocket({ onMessage, onOpen, onClose }: UseWebSocketOptions
   const reconnectTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
   const reconnectDelay = useRef(1000);
   const intentionalClose = useRef(false);
+  const mountedRef = useRef(true);
 
   // Store callbacks in refs so the connect function doesn't need them as deps
   const onMessageRef = useRef(onMessage);
@@ -23,7 +24,9 @@ export function useWebSocket({ onMessage, onOpen, onClose }: UseWebSocketOptions
   onOpenRef.current = onOpen;
   onCloseRef.current = onClose;
 
-  const connect = useCallback(() => {
+  const connectWs = useCallback(() => {
+    if (!mountedRef.current) return;
+
     // Guard against duplicate connections (OPEN or still CONNECTING)
     const state = wsRef.current?.readyState;
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return;
@@ -38,44 +41,61 @@ export function useWebSocket({ onMessage, onOpen, onClose }: UseWebSocketOptions
     }
 
     intentionalClose.current = false;
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/bible/api/chat`;
-    const ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
-      setIsConnected(true);
-      reconnectDelay.current = 1000;
-      onOpenRef.current?.();
-    };
+    try {
+      const ws = new WebSocket(wsUrl);
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        onMessageRef.current(data);
-      } catch {
-        // ignore malformed messages
-      }
-    };
+      ws.onopen = () => {
+        if (!mountedRef.current) {
+          ws.close();
+          return;
+        }
+        setIsConnected(true);
+        reconnectDelay.current = 1000;
+        onOpenRef.current?.();
+      };
 
-    ws.onclose = () => {
-      setIsConnected(false);
-      onCloseRef.current?.();
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          onMessageRef.current(data);
+        } catch {
+          // ignore malformed messages
+        }
+      };
 
-      // Auto-reconnect with exponential backoff (unless intentionally closed)
-      if (!intentionalClose.current) {
+      ws.onclose = () => {
+        if (!mountedRef.current) return;
+        setIsConnected(false);
+        onCloseRef.current?.();
+
+        // Auto-reconnect with exponential backoff (unless intentionally closed)
+        if (!intentionalClose.current && mountedRef.current) {
+          reconnectTimeout.current = setTimeout(() => {
+            reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000);
+            connectWs();
+          }, reconnectDelay.current);
+        }
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+
+      wsRef.current = ws;
+    } catch {
+      // WebSocket constructor can throw if URL is invalid
+      if (mountedRef.current && !intentionalClose.current) {
         reconnectTimeout.current = setTimeout(() => {
           reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000);
-          connect();
+          connectWs();
         }, reconnectDelay.current);
       }
-    };
-
-    ws.onerror = () => {
-      ws.close();
-    };
-
-    wsRef.current = ws;
-  }, []); // No deps — callbacks accessed via refs
+    }
+  }, []);
 
   const disconnect = useCallback(() => {
     intentionalClose.current = true;
@@ -93,15 +113,27 @@ export function useWebSocket({ onMessage, onOpen, onClose }: UseWebSocketOptions
     }
   }, []);
 
+  // Auto-connect on mount, clean up on unmount
   useEffect(() => {
+    mountedRef.current = true;
+    connectWs();
+
     return () => {
+      mountedRef.current = false;
       intentionalClose.current = true;
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
       }
-      wsRef.current?.close();
+      if (wsRef.current) {
+        wsRef.current.onopen = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onclose = null;
+        wsRef.current.onerror = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
-  }, []);
+  }, [connectWs]);
 
-  return { connect, disconnect, send, isConnected };
+  return { connect: connectWs, disconnect, send, isConnected };
 }
