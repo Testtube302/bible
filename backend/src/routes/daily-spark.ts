@@ -42,7 +42,9 @@ const DAILY_VERSES = [
 ];
 
 export async function dailySparkRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/daily-spark', async () => {
+  app.get('/daily-spark', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store, no-cache, must-revalidate');
+    reply.header('Pragma', 'no-cache');
     const today = new Date().toISOString().split('T')[0];
 
     // Check cache
