@@ -9,12 +9,24 @@ export function Header() {
         <Link href="/" className="flex items-center gap-2">
           <span className="text-gold text-xl font-serif font-bold tracking-wide">Scripture</span>
         </Link>
-        <nav className="hidden sm:flex items-center gap-6">
+        <nav className="hidden sm:flex items-center gap-5">
           <Link href="/read" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
             Bible
           </Link>
+          <Link href="/journeys" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
+            Journeys
+          </Link>
           <Link href="/chat" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
             Chat
+          </Link>
+          <Link href="/topics" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
+            Topics
+          </Link>
+          <Link href="/timeline" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
+            Timeline
+          </Link>
+          <Link href="/quest" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
+            Quest
           </Link>
           <Link href="/artwork" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
             Art

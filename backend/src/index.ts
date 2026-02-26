@@ -12,6 +12,10 @@ import { highlightRoutes } from './routes/highlights.js';
 import { progressRoutes } from './routes/progress.js';
 import { adminRoutes } from './routes/admin.js';
 import { chatRoutes } from './routes/chat.js';
+import { journeyRoutes } from './routes/journeys.js';
+import { questRoutes } from './routes/quest.js';
+import { topicRoutes } from './routes/topics.js';
+import { dailySparkRoutes } from './routes/daily-spark.js';
 
 async function build() {
   const app = Fastify({
@@ -36,6 +40,10 @@ async function build() {
   await app.register(progressRoutes, { prefix: '/api' });
   await app.register(adminRoutes, { prefix: '/api' });
   await app.register(chatRoutes, { prefix: '/api' });
+  await app.register(journeyRoutes, { prefix: '/api' });
+  await app.register(questRoutes, { prefix: '/api' });
+  await app.register(topicRoutes, { prefix: '/api' });
+  await app.register(dailySparkRoutes, { prefix: '/api' });
 
   return app;
 }

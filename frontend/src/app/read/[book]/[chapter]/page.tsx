@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
@@ -9,9 +9,12 @@ import { VerseList } from '@/components/bible/VerseList';
 import { TranslationToggle } from '@/components/bible/TranslationToggle';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Button } from '@/components/ui/Button';
+import { QuestionCard } from '@/components/quest/QuestionCard';
+import { XPPopup } from '@/components/quest/XPPopup';
 import { useBible } from '@/hooks/useBible';
 import { useBookmarks } from '@/hooks/useBookmarks';
 import { useHighlights } from '@/hooks/useHighlights';
+import { useQuestions } from '@/hooks/useQuest';
 import { decodeBookSlug, getBookSlug } from '@/lib/utils';
 import { api } from '@/lib/api';
 import type { Verse } from '@/types/bible';
@@ -27,14 +30,18 @@ export default function ChapterPage() {
   const { translation, setTranslation } = useBible();
   const { bookmarks, fetchBookmarks, addBookmark, removeBookmark, isBookmarked } = useBookmarks();
   const { highlights, fetchChapterHighlights, addHighlight } = useHighlights();
+  const { questions, loading: questionsLoading, error: questionsError, fetchQuestions, submitAnswer } = useQuestions();
 
   const [verses, setVerses] = useState<Verse[]>([]);
   const [loading, setLoading] = useState(true);
   const [chapterCount, setChapterCount] = useState(0);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [xpPopup, setXpPopup] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
+      setShowQuiz(false);
       try {
         const [chapterData, bookData] = await Promise.all([
           api.get<{ verses: Verse[] }>(
@@ -87,9 +94,26 @@ export default function ChapterPage() {
     router.push(`/chat?q=${query}&book=${verse.book}&chapter=${verse.chapter}&verse=${verse.verse}`);
   };
 
+  const handleStartQuiz = () => {
+    setShowQuiz(true);
+    fetchQuestions(bookName, chapterNum);
+  };
+
+  const handleAnswer = useCallback(async (questionIndex: number, answer: number) => {
+    const result = await submitAnswer(bookName, chapterNum, questionIndex, answer);
+    if (result?.xpAwarded) {
+      setXpPopup(result.xpAwarded);
+    }
+    return result;
+  }, [bookName, chapterNum, submitAnswer]);
+
   return (
     <div className="min-h-screen bg-dark-bg pb-20 sm:pb-4">
       <Header />
+
+      {xpPopup !== null && (
+        <XPPopup amount={xpPopup} onDone={() => setXpPopup(null)} />
+      )}
 
       <main className="max-w-3xl mx-auto px-4 py-6">
         {/* Breadcrumb + controls */}
@@ -129,6 +153,46 @@ export default function ChapterPage() {
             onHighlight={handleHighlight}
             onAskAI={handleAskAI}
           />
+        )}
+
+        {/* Quiz section */}
+        {!loading && !showQuiz && (
+          <div className="mt-6 text-center">
+            <Button variant="secondary" size="sm" onClick={handleStartQuiz}>
+              Test Your Understanding
+            </Button>
+          </div>
+        )}
+
+        {showQuiz && (
+          <div className="mt-8 pt-6 border-t border-dark-border">
+            <h2 className="text-gold font-serif text-lg font-semibold mb-4">
+              Test Your Understanding
+            </h2>
+            {questionsLoading ? (
+              <div className="flex flex-col items-center py-8 gap-3">
+                <LoadingSpinner size="md" />
+                <p className="text-dark-muted text-sm">Generating questions...</p>
+                <p className="text-dark-muted text-xs">First time may take up to a minute</p>
+              </div>
+            ) : questionsError ? (
+              <div className="text-center py-8">
+                <p className="text-dark-muted text-sm mb-3">{questionsError}</p>
+                <Button variant="secondary" size="sm" onClick={handleStartQuiz}>
+                  Try Again
+                </Button>
+              </div>
+            ) : (
+              questions.map((q, i) => (
+                <QuestionCard
+                  key={i}
+                  question={q}
+                  index={i}
+                  onAnswer={handleAnswer}
+                />
+              ))
+            )}
+          </div>
         )}
 
         {/* Chapter navigation */}

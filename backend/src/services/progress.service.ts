@@ -1,5 +1,6 @@
 import { query } from '../db/postgres.js';
 import type { ReadingProgress, ReadingStreak } from '../types/user.js';
+import { awardChapterXP, awardStreakXP, checkAndUnlockAchievements } from './quest.service.js';
 
 export async function getOverallProgress(): Promise<{
   totalChapters: number;
@@ -73,6 +74,15 @@ export async function updateChapterProgress(
     'INSERT INTO analytics_events (event_type, event_data) VALUES ($1, $2)',
     ['read_chapter', JSON.stringify({ bookName, chapter, completed })]
   ).catch(() => {});
+
+  // Award XP and check achievements
+  try {
+    await awardChapterXP(bookName, chapter);
+    await awardStreakXP();
+    await checkAndUnlockAchievements();
+  } catch {
+    // Quest system failures should not block reading progress
+  }
 }
 
 export async function getStreakData(): Promise<{

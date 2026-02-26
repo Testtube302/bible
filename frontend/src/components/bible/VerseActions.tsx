@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { CompareView } from '@/components/bible/CompareView';
 import { HIGHLIGHT_COLORS } from '@/lib/constants';
 import type { Verse } from '@/types/bible';
 
@@ -22,6 +24,12 @@ export function VerseActions({
   onHighlight,
   onAskAI,
 }: VerseActionsProps) {
+  const [showCompare, setShowCompare] = useState(false);
+
+  if (showCompare) {
+    return <CompareView verse={verse} onClose={() => setShowCompare(false)} />;
+  }
+
   return (
     <Modal isOpen onClose={onClose}>
       <div className="space-y-4">
@@ -54,6 +62,9 @@ export function VerseActions({
         <div className="flex flex-col gap-2">
           <Button variant="secondary" onClick={onBookmark} className="w-full justify-start gap-2">
             {isBookmarked ? 'Remove Bookmark' : 'Bookmark'}
+          </Button>
+          <Button variant="secondary" onClick={() => setShowCompare(true)} className="w-full justify-start gap-2">
+            Compare Translations
           </Button>
           <Button variant="primary" onClick={onAskAI} className="w-full justify-start gap-2">
             Ask AI about this verse
