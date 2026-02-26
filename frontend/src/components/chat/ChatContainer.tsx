@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { ModeSelector } from './ModeSelector';
@@ -18,11 +18,22 @@ export function ChatContainer() {
   } = useChat();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showConnecting, setShowConnecting] = useState(false);
 
   // Connect on mount
   useEffect(() => {
     connect();
   }, [connect]);
+
+  // Delay showing "Connecting" banner to avoid flash during brief reconnects
+  useEffect(() => {
+    if (isConnected) {
+      setShowConnecting(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowConnecting(true), 1500);
+    return () => clearTimeout(timer);
+  }, [isConnected]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -72,7 +83,7 @@ export function ChatContainer() {
       </div>
 
       {/* Connection status */}
-      {!isConnected && (
+      {showConnecting && (
         <div className="px-4 py-2 bg-burgundy/20 text-burgundy-light text-xs text-center">
           Connecting to Scripture assistant...
         </div>
