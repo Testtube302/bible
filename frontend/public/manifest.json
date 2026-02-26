@@ -1,0 +1,25 @@
+{
+  "name": "Scripture — Interactive Bible",
+  "short_name": "Scripture",
+  "description": "A Scripture-first interactive Bible platform",
+  "start_url": "/bible",
+  "scope": "/bible",
+  "display": "standalone",
+  "background_color": "#0D0F1A",
+  "theme_color": "#C9A84C",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/bible/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/bible/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

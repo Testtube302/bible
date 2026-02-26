@@ -1,0 +1,24 @@
+{
+  "name": "bible-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/run-all.ts",
+    "download": "tsx src/download-bibles.ts && tsx src/download-crossrefs.ts",
+    "ingest": "tsx src/ingest-chromadb.ts",
+    "seed": "tsx src/seed-postgres.ts"
+  },
+  "dependencies": {
+    "chromadb": "^1.9.2",
+    "chromadb-default-embed": "^2.13.2",
+    "pg": "^8.13.1",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "tsx": "^4.19.2",
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10"
+  }
+}
