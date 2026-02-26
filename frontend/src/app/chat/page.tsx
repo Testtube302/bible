@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { ChatContainer } from '@/components/chat/ChatContainer';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function ChatPage() {
   // Force a full page reload on client-side navigation so WebSocket connects cleanly
@@ -20,7 +21,9 @@ export default function ChatPage() {
   return (
     <div className="min-h-screen bg-dark-bg">
       <Header />
-      <ChatContainer />
+      <Suspense fallback={<div className="flex justify-center py-20"><LoadingSpinner size="lg" /></div>}>
+        <ChatContainer />
+      </Suspense>
       <BottomNav />
     </div>
   );

@@ -131,7 +131,7 @@ export default function HomePage() {
                   </div>
                 )}
               </SwipeableCard>
-              <Link href="/chat" className="block mt-3">
+              <Link href={`/chat?q=${encodeURIComponent(`Explain ${spark.book} ${spark.chapter}:${spark.verse}`)}`} className="block mt-3">
                 <p className="text-dark-muted text-xs hover:text-gold transition-colors">
                   Tap to discuss this verse with AI
                 </p>

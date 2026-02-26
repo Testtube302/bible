@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { ModeSelector } from './ModeSelector';
 import { useChat } from '@/hooks/useChat';
 
 export function ChatContainer() {
+  const searchParams = useSearchParams();
   const {
     messages,
     isStreaming,
@@ -18,6 +20,16 @@ export function ChatContainer() {
   } = useChat();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const autoSent = useRef(false);
+
+  // Auto-send query from URL param (e.g. ?q=Explain John 3:16)
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q && isConnected && !autoSent.current && messages.length === 0) {
+      autoSent.current = true;
+      sendMessage(q);
+    }
+  }, [searchParams, isConnected, messages.length, sendMessage]);
 
   // Auto-scroll to bottom
   useEffect(() => {
