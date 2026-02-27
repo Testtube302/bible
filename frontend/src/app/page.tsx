@@ -25,6 +25,13 @@ interface QuestSummary {
   currentStreak: number;
 }
 
+interface PlanSummary {
+  slug: string;
+  title: string;
+  durationDays: number;
+  progress: { completedDays: number[]; completedAt: string | null } | null;
+}
+
 interface JourneySummary {
   slug: string;
   title: string;
@@ -37,6 +44,7 @@ export default function HomePage() {
   const [spark, setSpark] = useState<DailySpark | null>(null);
   const [quest, setQuest] = useState<QuestSummary | null>(null);
   const [journeys, setJourneys] = useState<JourneySummary[]>([]);
+  const [plans, setPlans] = useState<PlanSummary[]>([]);
   const [sparkLoading, setSparkLoading] = useState(true);
 
   useEffect(() => {
@@ -61,6 +69,11 @@ export default function HomePage() {
     // Fetch journeys for preview
     api.get<{ journeys: JourneySummary[] }>('/journeys')
       .then(data => setJourneys(data.journeys.slice(0, 4)))
+      .catch(() => {});
+
+    // Fetch plans for preview
+    api.get<{ plans: PlanSummary[] }>('/plans')
+      .then(data => setPlans(data.plans.slice(0, 4)))
       .catch(() => {});
   }, []);
 
@@ -179,6 +192,30 @@ export default function HomePage() {
                 >
                   <p className="text-gold font-serif text-sm font-semibold mb-1">{j.title}</p>
                   <p className="text-dark-muted text-[10px]">{j.passages.length} passages</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Reading Plans section */}
+        {plans.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-dark-text font-serif text-lg font-semibold">Reading Plans</h2>
+              <Link href="/plans" className="text-gold text-xs hover:text-gold-light transition-colors">
+                View all
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {plans.map((p: any) => (
+                <Link
+                  key={p.slug}
+                  href={`/plans/${p.slug}`}
+                  className="bg-dark-card border border-dark-border rounded-xl p-4 hover:border-gold/30 transition-colors"
+                >
+                  <p className="text-gold font-serif text-sm font-semibold mb-1">{p.title}</p>
+                  <p className="text-dark-muted text-[10px]">{p.durationDays} days</p>
                 </Link>
               ))}
             </div>
