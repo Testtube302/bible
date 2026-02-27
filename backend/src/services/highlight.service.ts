@@ -51,6 +51,8 @@ export async function createHighlight(
   const result = await query(
     `INSERT INTO highlights (user_id, book_name, chapter, verse_start, verse_end, translation, color)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (user_id, book_name, chapter, verse_start, verse_end, translation)
+     DO UPDATE SET color = EXCLUDED.color
      RETURNING id, book_name, chapter, verse_start, verse_end, translation, color, created_at`,
     [userId, bookName, chapter, verseStart, verseEnd, translation, color]
   );

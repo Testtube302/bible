@@ -42,7 +42,13 @@ export function useHighlights() {
       translation,
       color,
     });
-    setHighlights(prev => [...prev, data.highlight]);
+    setHighlights(prev => {
+      const filtered = prev.filter(h =>
+        !(h.bookName === bookName && h.chapter === chapter &&
+          h.verseStart === verseStart && h.verseEnd === verseEnd)
+      );
+      return [...filtered, data.highlight];
+    });
     return data.highlight;
   }, []);
 
