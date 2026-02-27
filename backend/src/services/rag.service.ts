@@ -121,41 +121,52 @@ export async function retrieveSources(
     }
   }
 
-  // Enrich top 5 results with cross-references from PostgreSQL
+  // Enrich top 3 results with cross-references (parallelized)
   try {
-    const topVerses = verses.slice(0, 5);
+    const topVerses = verses.slice(0, 3);
 
-    for (const v of topVerses) {
-      const xrefs = await pgQuery(
-        `SELECT to_book, to_chapter, to_verse_start FROM cross_references
-         WHERE from_book = $1 AND from_chapter = $2 AND from_verse = $3
-         ORDER BY votes DESC LIMIT 3`,
-        [v.book, v.chapter, v.verse]
-      );
+    // Fetch all cross-references in parallel
+    const xrefResults = await Promise.all(
+      topVerses.map(v =>
+        pgQuery(
+          `SELECT to_book, to_chapter, to_verse_start FROM cross_references
+           WHERE from_book = $1 AND from_chapter = $2 AND from_verse = $3
+           ORDER BY votes DESC LIMIT 3`,
+          [v.book, v.chapter, v.verse]
+        )
+      )
+    );
 
-      for (const row of xrefs.rows) {
-        const xrefId = `KJV_${(row.to_book as string).replace(/\s+/g, '_')}_${row.to_chapter}_${row.to_verse_start}`;
-        try {
-          const xrefVerse = await versesCollection.get({ ids: [xrefId] });
-          if (xrefVerse.documents?.[0]) {
-            const xMeta = xrefVerse.metadatas?.[0] as Record<string, any> | undefined;
-            const alreadyExists = verses.some(
-              existing => existing.book === row.to_book &&
-                existing.chapter === row.to_chapter &&
-                existing.verse === row.to_verse_start
-            );
-            if (!alreadyExists) {
-              verses.push({
-                book: row.to_book as string,
-                chapter: row.to_chapter as number,
-                verse: row.to_verse_start as number,
-                text: xrefVerse.documents[0],
-                translation: (xMeta?.translation as string) ?? 'KJV',
-              });
-            }
-          }
-        } catch {
-          // cross-ref verse not found
+    // Collect all cross-ref IDs to fetch in a single batch
+    const xrefIds: string[] = [];
+    const xrefMeta: Array<{ book: string; chapter: number; verse: number }> = [];
+    for (const result of xrefResults) {
+      for (const row of result.rows) {
+        const id = `KJV_${(row.to_book as string).replace(/\s+/g, '_')}_${row.to_chapter}_${row.to_verse_start}`;
+        const alreadyExists = verses.some(
+          v => v.book === row.to_book && v.chapter === row.to_chapter && v.verse === row.to_verse_start
+        );
+        if (!alreadyExists && !xrefIds.includes(id)) {
+          xrefIds.push(id);
+          xrefMeta.push({ book: row.to_book, chapter: row.to_chapter, verse: row.to_verse_start });
+        }
+      }
+    }
+
+    // Single batch fetch from ChromaDB
+    if (xrefIds.length > 0) {
+      const xrefVerses = await versesCollection.get({ ids: xrefIds });
+      if (xrefVerses.documents) {
+        for (let i = 0; i < xrefVerses.documents.length; i++) {
+          if (!xrefVerses.documents[i]) continue;
+          const xMeta = xrefVerses.metadatas?.[i] as Record<string, any> | undefined;
+          verses.push({
+            book: xrefMeta[i].book,
+            chapter: xrefMeta[i].chapter,
+            verse: xrefMeta[i].verse,
+            text: xrefVerses.documents[i]!,
+            translation: (xMeta?.translation as string) ?? 'KJV',
+          });
         }
       }
     }
@@ -170,9 +181,10 @@ export async function* generateResponse(
   userMessage: string,
   mode: ChatMode,
   conversationHistory: ChatMessage[],
-  verseContext?: VerseContext
+  verseContext?: VerseContext,
+  prefetchedVerses?: RetrievedVerse[]
 ): AsyncIterable<LLMStreamChunk> {
-  const verses = await retrieveSources(userMessage, verseContext);
+  const verses = prefetchedVerses ?? await retrieveSources(userMessage, verseContext);
 
   // Build context string
   const contextStr = verses

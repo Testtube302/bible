@@ -75,26 +75,26 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
         const sessionId = message.sessionId || await chatService.createSession(userId!, message.mode);
         socket.send(JSON.stringify({ type: 'session', sessionId }));
 
-        // Save user message
-        await chatService.saveMessage(sessionId, 'user', message.content);
+        // Run save, history fetch, and RAG retrieval in parallel
+        const [, history, sources] = await Promise.all([
+          chatService.saveMessage(sessionId, 'user', message.content),
+          chatService.getSessionHistory(sessionId),
+          ragService.retrieveSources(message.content, message.verseContext),
+        ]);
 
-        // Get conversation history
-        const history = await chatService.getSessionHistory(sessionId);
-
-        // Retrieve sources and send to client
-        const sources = await ragService.retrieveSources(message.content, message.verseContext);
         socket.send(JSON.stringify({
           type: 'sources',
           verses: sources.slice(0, 10).map(s => `${s.book} ${s.chapter}:${s.verse}`),
         }));
 
-        // Stream AI response
+        // Stream AI response (pass pre-fetched sources to avoid duplicate retrieval)
         let fullResponse = '';
         for await (const chunk of ragService.generateResponse(
           message.content,
           message.mode,
           history.slice(0, -1), // exclude the message we just saved
-          message.verseContext
+          message.verseContext,
+          sources
         )) {
           if (chunk.content) {
             fullResponse += chunk.content;

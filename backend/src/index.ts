@@ -18,6 +18,7 @@ import { topicRoutes } from './routes/topics.js';
 import { dailySparkRoutes } from './routes/daily-spark.js';
 import { planRoutes } from './routes/plans.js';
 import { authRoutes } from './routes/auth.js';
+import { notebookRoutes } from './routes/notebook.js';
 
 async function build() {
   const app = Fastify({
@@ -48,6 +49,7 @@ async function build() {
   await app.register(dailySparkRoutes, { prefix: '/api' });
   await app.register(planRoutes, { prefix: '/api' });
   await app.register(authRoutes, { prefix: '/api' });
+  await app.register(notebookRoutes, { prefix: '/api' });
 
   return app;
 }

@@ -37,6 +37,12 @@ export function Header() {
           <Link href="/artwork" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
             Art
           </Link>
+          <Link href="/bookmarks" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
+            Bookmarks
+          </Link>
+          <Link href="/notebook" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
+            Notebook
+          </Link>
 
           {isAuthenticated ? (
             <div className="flex items-center gap-3 ml-2 pl-2 border-l border-dark-border">

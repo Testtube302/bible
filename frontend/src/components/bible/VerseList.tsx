@@ -10,18 +10,22 @@ interface VerseListProps {
   verses: Verse[];
   highlights: Highlight[];
   bookmarkedVerses: Set<number>;
+  targetVerse?: number;
   onBookmark: (verse: number) => void;
   onHighlight: (verse: number, color: string) => void;
   onAskAI: (verse: Verse) => void;
+  onAddToNotebook?: (verse: Verse) => void;
 }
 
 export function VerseList({
   verses,
   highlights,
   bookmarkedVerses,
+  targetVerse,
   onBookmark,
   onHighlight,
   onAskAI,
+  onAddToNotebook,
 }: VerseListProps) {
   const [selectedVerse, setSelectedVerse] = useState<Verse | null>(null);
 
@@ -38,6 +42,7 @@ export function VerseList({
           verse={verse}
           highlightColor={getHighlightColor(verse.verse)}
           isBookmarked={bookmarkedVerses.has(verse.verse)}
+          isTarget={targetVerse === verse.verse}
           onTap={() => setSelectedVerse(verse)}
         />
       ))}
@@ -55,6 +60,10 @@ export function VerseList({
             onHighlight(selectedVerse.verse, color);
             setSelectedVerse(null);
           }}
+          onAddToNotebook={onAddToNotebook ? () => {
+            onAddToNotebook(selectedVerse);
+            setSelectedVerse(null);
+          } : undefined}
           onAskAI={() => {
             onAskAI(selectedVerse);
             setSelectedVerse(null);

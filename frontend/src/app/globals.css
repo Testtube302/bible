@@ -50,10 +50,10 @@ body {
 }
 
 /* Highlight colors */
-.highlight-gold { background-color: color-mix(in srgb, var(--color-gold) 20%, transparent); }
-.highlight-blue { background-color: color-mix(in srgb, #4A90D9 20%, transparent); }
-.highlight-green { background-color: color-mix(in srgb, #4CAF50 20%, transparent); }
-.highlight-purple { background-color: color-mix(in srgb, #9C27B0 20%, transparent); }
+.highlight-gold { background-color: color-mix(in srgb, var(--color-gold) 30%, transparent); }
+.highlight-blue { background-color: color-mix(in srgb, #4A90D9 35%, transparent); }
+.highlight-green { background-color: color-mix(in srgb, #4CAF50 35%, transparent); }
+.highlight-purple { background-color: color-mix(in srgb, #9C27B0 35%, transparent); }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {

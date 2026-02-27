@@ -13,6 +13,7 @@ interface VerseActionsProps {
   onClose: () => void;
   onBookmark: () => void;
   onHighlight: (color: string) => void;
+  onAddToNotebook?: () => void;
   onAskAI: () => void;
 }
 
@@ -22,6 +23,7 @@ export function VerseActions({
   onClose,
   onBookmark,
   onHighlight,
+  onAddToNotebook,
   onAskAI,
 }: VerseActionsProps) {
   const [showCompare, setShowCompare] = useState(false);
@@ -63,6 +65,11 @@ export function VerseActions({
           <Button variant="secondary" onClick={onBookmark} className="w-full justify-start gap-2">
             {isBookmarked ? 'Remove Bookmark' : 'Bookmark'}
           </Button>
+          {onAddToNotebook && (
+            <Button variant="secondary" onClick={onAddToNotebook} className="w-full justify-start gap-2">
+              Add to Notebook
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => setShowCompare(true)} className="w-full justify-start gap-2">
             Compare Translations
           </Button>

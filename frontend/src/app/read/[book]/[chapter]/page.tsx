@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -14,6 +14,7 @@ import { XPPopup } from '@/components/quest/XPPopup';
 import { useBible } from '@/hooks/useBible';
 import { useBookmarks } from '@/hooks/useBookmarks';
 import { useHighlights } from '@/hooks/useHighlights';
+import { useNotebook } from '@/hooks/useNotebook';
 import { useQuestions } from '@/hooks/useQuest';
 import { decodeBookSlug, getBookSlug } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -23,13 +24,19 @@ import type { Translation } from '@/lib/constants';
 export default function ChapterPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const bookSlug = params.book as string;
   const chapterNum = parseInt(params.chapter as string, 10);
   const bookName = decodeBookSlug(bookSlug);
+  const targetVerseParam = searchParams.get('verse');
+  const [targetVerse, setTargetVerse] = useState<number | undefined>(
+    targetVerseParam ? parseInt(targetVerseParam, 10) : undefined
+  );
 
   const { translation, setTranslation } = useBible();
   const { bookmarks, fetchBookmarks, addBookmark, removeBookmark, isBookmarked } = useBookmarks();
   const { highlights, fetchChapterHighlights, addHighlight } = useHighlights();
+  const { addEntry: addNotebookEntry } = useNotebook();
   const { questions, loading: questionsLoading, error: questionsError, fetchQuestions, submitAnswer } = useQuestions();
 
   const [verses, setVerses] = useState<Verse[]>([]);
@@ -62,6 +69,18 @@ export default function ChapterPage() {
     fetchChapterHighlights(bookName, chapterNum);
   }, [bookName, chapterNum, translation, fetchBookmarks, fetchChapterHighlights]);
 
+  // Scroll to target verse
+  useEffect(() => {
+    if (targetVerse && verses.length > 0) {
+      const el = document.getElementById(`verse-${targetVerse}`);
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+      }
+      const timer = setTimeout(() => setTargetVerse(undefined), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [targetVerse, verses]);
+
   // Mark chapter as read
   useEffect(() => {
     if (verses.length > 0) {
@@ -87,6 +106,14 @@ export default function ChapterPage() {
 
   const handleHighlight = async (verse: number, color: string) => {
     await addHighlight(bookName, chapterNum, verse, verse, translation, color);
+  };
+
+  const handleAddToNotebook = async (verse: Verse) => {
+    try {
+      await addNotebookEntry(bookName, verse.chapter, verse.verse, verse.text, translation);
+    } catch (err) {
+      console.error('Failed to add to notebook:', err);
+    }
   };
 
   const handleAskAI = (verse: Verse) => {
@@ -149,8 +176,10 @@ export default function ChapterPage() {
             verses={verses}
             highlights={highlights}
             bookmarkedVerses={bookmarkedVerses}
+            targetVerse={targetVerse}
             onBookmark={handleBookmark}
             onHighlight={handleHighlight}
+            onAddToNotebook={handleAddToNotebook}
             onAskAI={handleAskAI}
           />
         )}
