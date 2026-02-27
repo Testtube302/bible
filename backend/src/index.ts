@@ -16,6 +16,8 @@ import { journeyRoutes } from './routes/journeys.js';
 import { questRoutes } from './routes/quest.js';
 import { topicRoutes } from './routes/topics.js';
 import { dailySparkRoutes } from './routes/daily-spark.js';
+import { planRoutes } from './routes/plans.js';
+import { authRoutes } from './routes/auth.js';
 
 async function build() {
   const app = Fastify({
@@ -44,6 +46,8 @@ async function build() {
   await app.register(questRoutes, { prefix: '/api' });
   await app.register(topicRoutes, { prefix: '/api' });
   await app.register(dailySparkRoutes, { prefix: '/api' });
+  await app.register(planRoutes, { prefix: '/api' });
+  await app.register(authRoutes, { prefix: '/api' });
 
   return app;
 }

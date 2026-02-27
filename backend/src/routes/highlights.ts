@@ -2,16 +2,20 @@ import type { FastifyInstance } from 'fastify';
 import * as highlightService from '../services/highlight.service.js';
 
 export async function highlightRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/highlights', async () => {
-    const highlights = await highlightService.getAllHighlights();
+  app.get('/highlights', {
+    preHandler: [app.authenticateUser],
+  }, async (request) => {
+    const highlights = await highlightService.getAllHighlights(request.userId!);
     return { highlights };
   });
 
   app.get<{
     Params: { book: string; chapter: string };
-  }>('/highlights/:book/:chapter', async (request) => {
+  }>('/highlights/:book/:chapter', {
+    preHandler: [app.authenticateUser],
+  }, async (request) => {
     const chapter = parseInt(request.params.chapter, 10);
-    const highlights = await highlightService.getChapterHighlights(request.params.book, chapter);
+    const highlights = await highlightService.getChapterHighlights(request.userId!, request.params.book, chapter);
     return { highlights };
   });
 
@@ -24,7 +28,9 @@ export async function highlightRoutes(app: FastifyInstance): Promise<void> {
       translation?: string;
       color?: string;
     };
-  }>('/highlights', async (request, reply) => {
+  }>('/highlights', {
+    preHandler: [app.authenticateUser],
+  }, async (request, reply) => {
     const { book_name, chapter, verse_start, verse_end, translation, color } = request.body;
 
     if (!book_name || !chapter || !verse_start || !verse_end) {
@@ -32,13 +38,15 @@ export async function highlightRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const highlight = await highlightService.createHighlight(
-      book_name, chapter, verse_start, verse_end, translation ?? 'KJV', color ?? 'gold'
+      request.userId!, book_name, chapter, verse_start, verse_end, translation ?? 'KJV', color ?? 'gold'
     );
     return reply.status(201).send({ highlight });
   });
 
-  app.delete<{ Params: { id: string } }>('/highlights/:id', async (request, reply) => {
-    const deleted = await highlightService.deleteHighlight(request.params.id);
+  app.delete<{ Params: { id: string } }>('/highlights/:id', {
+    preHandler: [app.authenticateUser],
+  }, async (request, reply) => {
+    const deleted = await highlightService.deleteHighlight(request.userId!, request.params.id);
     if (!deleted) {
       return reply.status(404).send({ error: 'Highlight not found' });
     }

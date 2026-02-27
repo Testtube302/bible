@@ -40,8 +40,11 @@ export interface ChapterQuestion {
   versesCited: string[];
 }
 
-export async function getTotalXP(): Promise<number> {
-  const result = await query('SELECT COALESCE(SUM(xp_amount), 0) as total FROM quest_xp');
+export async function getTotalXP(userId: string): Promise<number> {
+  const result = await query(
+    'SELECT COALESCE(SUM(xp_amount), 0) as total FROM quest_xp WHERE user_id = $1',
+    [userId]
+  );
   return parseInt(result.rows[0].total, 10);
 }
 
@@ -52,41 +55,42 @@ export function getLevel(totalXP: number): { level: number; xpToNextLevel: numbe
 }
 
 export async function awardXP(
+  userId: string,
   sourceType: string,
   sourceId: string,
   xpAmount: number
 ): Promise<void> {
-  // Idempotent: check if already awarded
+  // Idempotent: check if already awarded for this user
   const existing = await query(
-    'SELECT id FROM quest_xp WHERE source_type = $1 AND source_id = $2',
-    [sourceType, sourceId]
+    'SELECT id FROM quest_xp WHERE source_type = $1 AND source_id = $2 AND user_id = $3',
+    [sourceType, sourceId, userId]
   );
   if (existing.rows.length > 0) return;
 
   await query(
-    'INSERT INTO quest_xp (source_type, source_id, xp_amount) VALUES ($1, $2, $3)',
-    [sourceType, sourceId, xpAmount]
+    'INSERT INTO quest_xp (user_id, source_type, source_id, xp_amount) VALUES ($1, $2, $3, $4)',
+    [userId, sourceType, sourceId, xpAmount]
   );
 }
 
-export async function awardChapterXP(bookName: string, chapter: number): Promise<void> {
-  await awardXP('chapter_read', `${bookName}:${chapter}`, XP_PER_CHAPTER);
+export async function awardChapterXP(userId: string, bookName: string, chapter: number): Promise<void> {
+  await awardXP(userId, 'chapter_read', `${bookName}:${chapter}`, XP_PER_CHAPTER);
 }
 
-export async function awardStreakXP(): Promise<void> {
+export async function awardStreakXP(userId: string): Promise<void> {
   const today = new Date().toISOString().split('T')[0];
-  await awardXP('streak_bonus', today, XP_PER_STREAK_DAY);
+  await awardXP(userId, 'streak_bonus', today, XP_PER_STREAK_DAY);
 }
 
-export async function awardJourneyXP(journeyId: string): Promise<void> {
-  await awardXP('journey_completed', journeyId, XP_PER_JOURNEY_COMPLETE);
+export async function awardJourneyXP(userId: string, journeyId: string): Promise<void> {
+  await awardXP(userId, 'journey_completed', journeyId, XP_PER_JOURNEY_COMPLETE);
 }
 
 export async function generateChapterQuestions(
   bookName: string,
   chapter: number
 ): Promise<ChapterQuestion[]> {
-  // Check cache
+  // Check cache (questions are shared, not per-user)
   const cached = await query(
     'SELECT questions FROM chapter_questions WHERE book_name = $1 AND chapter = $2',
     [bookName, chapter]
@@ -124,6 +128,7 @@ export async function generateChapterQuestions(
 }
 
 export async function submitAnswer(
+  userId: string,
   bookName: string,
   chapter: number,
   questionIndex: number,
@@ -136,26 +141,27 @@ export async function submitAnswer(
   const isCorrect = userAnswer === question.answer;
 
   await query(
-    'INSERT INTO question_responses (book_name, chapter, question_index, user_answer, is_correct) VALUES ($1, $2, $3, $4, $5)',
-    [bookName, chapter, questionIndex, userAnswer, isCorrect]
+    'INSERT INTO question_responses (user_id, book_name, chapter, question_index, user_answer, is_correct) VALUES ($1, $2, $3, $4, $5, $6)',
+    [userId, bookName, chapter, questionIndex, userAnswer, isCorrect]
   );
 
   let xpAwarded = 0;
   if (isCorrect) {
     const sourceId = `${bookName}:${chapter}:q${questionIndex}`;
-    await awardXP('question_answered', sourceId, XP_PER_CORRECT_ANSWER);
+    await awardXP(userId, 'question_answered', sourceId, XP_PER_CORRECT_ANSWER);
     xpAwarded = XP_PER_CORRECT_ANSWER;
   }
 
   return { correct: isCorrect, xpAwarded };
 }
 
-export async function getAllAchievements(): Promise<AchievementInfo[]> {
+export async function getAllAchievements(userId: string): Promise<AchievementInfo[]> {
   const result = await query(
     `SELECT a.*, ap.unlocked, ap.unlocked_at
      FROM achievements a
-     LEFT JOIN achievement_progress ap ON ap.achievement_id = a.id
-     ORDER BY a.sort_order`
+     LEFT JOIN achievement_progress ap ON ap.achievement_id = a.id AND ap.user_id = $1
+     ORDER BY a.sort_order`,
+    [userId]
   );
 
   return result.rows.map(row => ({
@@ -171,15 +177,15 @@ export async function getAllAchievements(): Promise<AchievementInfo[]> {
   }));
 }
 
-export async function checkAndUnlockAchievements(): Promise<AchievementInfo[]> {
+export async function checkAndUnlockAchievements(userId: string): Promise<AchievementInfo[]> {
   const achievements = await query('SELECT * FROM achievements');
   const newlyUnlocked: AchievementInfo[] = [];
 
   for (const ach of achievements.rows) {
-    // Skip if already unlocked
+    // Skip if already unlocked for this user
     const progress = await query(
-      'SELECT unlocked FROM achievement_progress WHERE achievement_id = $1',
-      [ach.id]
+      'SELECT unlocked FROM achievement_progress WHERE achievement_id = $1 AND user_id = $2',
+      [ach.id, userId]
     );
     if (progress.rows.length > 0 && progress.rows[0].unlocked) continue;
 
@@ -189,7 +195,8 @@ export async function checkAndUnlockAchievements(): Promise<AchievementInfo[]> {
     switch (criteria.type) {
       case 'chapters_read': {
         const result = await query(
-          'SELECT COUNT(*) as count FROM reading_progress WHERE completed = TRUE'
+          'SELECT COUNT(*) as count FROM reading_progress WHERE completed = TRUE AND user_id = $1',
+          [userId]
         );
         met = parseInt(result.rows[0].count, 10) >= criteria.count;
         break;
@@ -197,8 +204,8 @@ export async function checkAndUnlockAchievements(): Promise<AchievementInfo[]> {
       case 'book_completed': {
         const result = await query(
           `SELECT COUNT(*) as count FROM reading_progress
-           WHERE book_name = $1 AND completed = TRUE`,
-          [criteria.book]
+           WHERE book_name = $1 AND completed = TRUE AND user_id = $2`,
+          [criteria.book, userId]
         );
         const bookChapters = await query(
           'SELECT chapter_count FROM bible_books WHERE name = $1',
@@ -211,8 +218,8 @@ export async function checkAndUnlockAchievements(): Promise<AchievementInfo[]> {
       }
       case 'streak_days': {
         const streakResult = await query(
-          'SELECT date FROM reading_streaks ORDER BY date DESC LIMIT $1',
-          [criteria.days]
+          'SELECT date FROM reading_streaks WHERE user_id = $1 ORDER BY date DESC LIMIT $2',
+          [userId, criteria.days]
         );
         if (streakResult.rows.length >= criteria.days) {
           // Check consecutive
@@ -229,14 +236,16 @@ export async function checkAndUnlockAchievements(): Promise<AchievementInfo[]> {
       }
       case 'correct_answers': {
         const result = await query(
-          'SELECT COUNT(*) as count FROM question_responses WHERE is_correct = TRUE'
+          'SELECT COUNT(*) as count FROM question_responses WHERE is_correct = TRUE AND user_id = $1',
+          [userId]
         );
         met = parseInt(result.rows[0].count, 10) >= criteria.count;
         break;
       }
       case 'journeys_completed': {
         const result = await query(
-          'SELECT COUNT(*) as count FROM journey_progress WHERE completed = TRUE'
+          'SELECT COUNT(*) as count FROM journey_progress WHERE completed = TRUE AND user_id = $1',
+          [userId]
         );
         met = parseInt(result.rows[0].count, 10) >= criteria.count;
         break;
@@ -250,12 +259,12 @@ export async function checkAndUnlockAchievements(): Promise<AchievementInfo[]> {
 
     if (met) {
       await query(
-        `INSERT INTO achievement_progress (achievement_id, unlocked, unlocked_at)
-         VALUES ($1, TRUE, NOW())
-         ON CONFLICT (achievement_id) DO UPDATE SET unlocked = TRUE, unlocked_at = NOW()`,
-        [ach.id]
+        `INSERT INTO achievement_progress (user_id, achievement_id, unlocked, unlocked_at)
+         VALUES ($1, $2, TRUE, NOW())
+         ON CONFLICT (user_id, achievement_id) DO UPDATE SET unlocked = TRUE, unlocked_at = NOW()`,
+        [userId, ach.id]
       );
-      await awardXP('achievement', ach.id, ach.xp_reward);
+      await awardXP(userId, 'achievement', ach.id, ach.xp_reward);
       newlyUnlocked.push({
         id: ach.id,
         slug: ach.slug,
@@ -273,14 +282,14 @@ export async function checkAndUnlockAchievements(): Promise<AchievementInfo[]> {
   return newlyUnlocked;
 }
 
-export async function getQuestDashboard(): Promise<QuestDashboard> {
-  const totalXP = await getTotalXP();
+export async function getQuestDashboard(userId: string): Promise<QuestDashboard> {
+  const totalXP = await getTotalXP(userId);
   const { level, xpToNextLevel } = getLevel(totalXP);
 
   const [streakResult, chaptersResult, answersResult] = await Promise.all([
-    query('SELECT date FROM reading_streaks ORDER BY date DESC LIMIT 90'),
-    query('SELECT COUNT(*) as count FROM reading_progress WHERE completed = TRUE'),
-    query('SELECT COUNT(*) as total, SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct FROM question_responses'),
+    query('SELECT date FROM reading_streaks WHERE user_id = $1 ORDER BY date DESC LIMIT 90', [userId]),
+    query('SELECT COUNT(*) as count FROM reading_progress WHERE completed = TRUE AND user_id = $1', [userId]),
+    query('SELECT COUNT(*) as total, SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct FROM question_responses WHERE user_id = $1', [userId]),
   ]);
 
   // Calculate current streak
@@ -295,7 +304,7 @@ export async function getQuestDashboard(): Promise<QuestDashboard> {
     else break;
   }
 
-  const achievements = await getAllAchievements();
+  const achievements = await getAllAchievements(userId);
 
   return {
     totalXP,

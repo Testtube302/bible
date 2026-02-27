@@ -1,8 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
 
 export function Header() {
+  const { user, isAuthenticated, logout } = useAuth();
+
   return (
     <header className="sticky top-0 z-40 bg-dark-bg/90 backdrop-blur-md border-b border-dark-border">
       <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -15,6 +18,9 @@ export function Header() {
           </Link>
           <Link href="/journeys" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
             Journeys
+          </Link>
+          <Link href="/plans" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
+            Plans
           </Link>
           <Link href="/chat" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
             Chat
@@ -31,6 +37,25 @@ export function Header() {
           <Link href="/artwork" className="text-dark-muted hover:text-dark-text transition-colors text-sm">
             Art
           </Link>
+
+          {isAuthenticated ? (
+            <div className="flex items-center gap-3 ml-2 pl-2 border-l border-dark-border">
+              <span className="text-dark-muted text-xs">{user?.displayName}</span>
+              <button
+                onClick={logout}
+                className="text-dark-muted hover:text-dark-text transition-colors text-xs"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="text-gold hover:text-gold-light transition-colors text-sm ml-2 pl-2 border-l border-dark-border"
+            >
+              Sign In
+            </Link>
+          )}
         </nav>
       </div>
     </header>

@@ -2,7 +2,7 @@ import { query } from '../db/postgres.js';
 import type { ReadingProgress, ReadingStreak } from '../types/user.js';
 import { awardChapterXP, awardStreakXP, checkAndUnlockAchievements } from './quest.service.js';
 
-export async function getOverallProgress(): Promise<{
+export async function getOverallProgress(userId: string): Promise<{
   totalChapters: number;
   completedChapters: number;
   books: Array<{ bookName: string; completed: number; total: number }>;
@@ -12,7 +12,8 @@ export async function getOverallProgress(): Promise<{
   );
 
   const progressResult = await query(
-    'SELECT book_name, COUNT(*) as completed FROM reading_progress WHERE completed = TRUE GROUP BY book_name'
+    'SELECT book_name, COUNT(*) as completed FROM reading_progress WHERE completed = TRUE AND user_id = $1 GROUP BY book_name',
+    [userId]
   );
 
   const completedMap = new Map(
@@ -33,10 +34,10 @@ export async function getOverallProgress(): Promise<{
   };
 }
 
-export async function getBookProgress(bookName: string): Promise<ReadingProgress[]> {
+export async function getBookProgress(userId: string, bookName: string): Promise<ReadingProgress[]> {
   const result = await query(
-    'SELECT book_name, chapter, completed, last_verse_read, read_at FROM reading_progress WHERE book_name = $1 ORDER BY chapter',
-    [bookName]
+    'SELECT book_name, chapter, completed, last_verse_read, read_at FROM reading_progress WHERE book_name = $1 AND user_id = $2 ORDER BY chapter',
+    [bookName, userId]
   );
   return result.rows.map(row => ({
     bookName: row.book_name,
@@ -48,25 +49,27 @@ export async function getBookProgress(bookName: string): Promise<ReadingProgress
 }
 
 export async function updateChapterProgress(
+  userId: string,
   bookName: string,
   chapter: number,
   completed: boolean,
   lastVerseRead: number
 ): Promise<void> {
   await query(
-    `INSERT INTO reading_progress (book_name, chapter, completed, last_verse_read, read_at)
-     VALUES ($1, $2, $3, $4, NOW())
-     ON CONFLICT (book_name, chapter)
-     DO UPDATE SET completed = $3, last_verse_read = $4, read_at = NOW()`,
-    [bookName, chapter, completed, lastVerseRead]
+    `INSERT INTO reading_progress (user_id, book_name, chapter, completed, last_verse_read, read_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     ON CONFLICT (user_id, book_name, chapter)
+     DO UPDATE SET completed = $4, last_verse_read = $5, read_at = NOW()`,
+    [userId, bookName, chapter, completed, lastVerseRead]
   );
 
   // Update streak
   await query(
-    `INSERT INTO reading_streaks (date, chapters_read)
-     VALUES (CURRENT_DATE, 1)
-     ON CONFLICT (date)
+    `INSERT INTO reading_streaks (user_id, date, chapters_read)
+     VALUES ($1, CURRENT_DATE, 1)
+     ON CONFLICT (user_id, date)
      DO UPDATE SET chapters_read = reading_streaks.chapters_read + 1`,
+    [userId]
   );
 
   // Log analytics
@@ -77,22 +80,23 @@ export async function updateChapterProgress(
 
   // Award XP and check achievements
   try {
-    await awardChapterXP(bookName, chapter);
-    await awardStreakXP();
-    await checkAndUnlockAchievements();
+    await awardChapterXP(userId, bookName, chapter);
+    await awardStreakXP(userId);
+    await checkAndUnlockAchievements(userId);
   } catch {
     // Quest system failures should not block reading progress
   }
 }
 
-export async function getStreakData(): Promise<{
+export async function getStreakData(userId: string): Promise<{
   currentStreak: number;
   longestStreak: number;
   recentDays: ReadingStreak[];
 }> {
   // Get recent streak data
   const result = await query(
-    'SELECT date, chapters_read, minutes_spent FROM reading_streaks ORDER BY date DESC LIMIT 90'
+    'SELECT date, chapters_read, minutes_spent FROM reading_streaks WHERE user_id = $1 ORDER BY date DESC LIMIT 90',
+    [userId]
   );
 
   const recentDays: ReadingStreak[] = result.rows.map(r => ({

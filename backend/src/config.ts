@@ -30,6 +30,7 @@ const configSchema = z.object({
   ADMIN_USERNAME: z.string().default('admin'),
   ADMIN_PASSWORD: z.string(),
   ADMIN_SESSION_SECRET: z.string(),
+  ADMIN_EMAIL: z.string().default('admin@scripture.app'),
 });
 
 export type Config = z.infer<typeof configSchema>;

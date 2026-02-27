@@ -13,8 +13,12 @@ export function useBookmarks() {
     try {
       const data = await api.get<{ bookmarks: Bookmark[] }>('/bookmarks');
       setBookmarks(data.bookmarks);
-    } catch (err) {
-      console.error('Failed to fetch bookmarks:', err);
+    } catch (err: any) {
+      if (err.message?.includes('401')) {
+        setBookmarks([]);
+      } else {
+        console.error('Failed to fetch bookmarks:', err);
+      }
     } finally {
       setLoading(false);
     }

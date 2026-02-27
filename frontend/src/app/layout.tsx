@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Lora } from 'next/font/google';
+import { AuthProvider } from '@/contexts/AuthContext';
 import './globals.css';
 
 const inter = Inter({
@@ -44,7 +45,9 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/bible/icons/icon-192x192.png" />
       </head>
       <body className="bg-dark-bg text-dark-text min-h-screen antialiased">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

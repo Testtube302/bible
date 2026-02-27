@@ -15,8 +15,12 @@ export function useQuest() {
     try {
       const data = await api.get<QuestDashboard>('/quest/dashboard');
       setDashboard(data);
-    } catch (err) {
-      console.error('Failed to fetch quest dashboard:', err);
+    } catch (err: any) {
+      if (err.message?.includes('401')) {
+        setDashboard(null);
+      } else {
+        console.error('Failed to fetch quest dashboard:', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -48,6 +52,10 @@ export function useQuestions() {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        if (response.status === 401) {
+          setError('Please sign in to access quizzes.');
+          return;
+        }
         throw new Error(`HTTP ${response.status}`);
       }
       const data = await response.json();
@@ -56,7 +64,7 @@ export function useQuestions() {
       clearTimeout(timeoutId);
       if (err.name === 'AbortError') {
         setError('Question generation timed out. Please try again.');
-      } else {
+      } else if (!error) {
         setError('Failed to generate questions. Please try again.');
       }
       console.error('Failed to fetch questions:', err);

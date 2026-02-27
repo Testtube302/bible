@@ -1,10 +1,10 @@
 import { query } from '../db/postgres.js';
 import type { ChatMode, ChatMessage, StoredMessage } from '../types/chat.js';
 
-export async function createSession(mode: ChatMode): Promise<string> {
+export async function createSession(userId: string, mode: ChatMode): Promise<string> {
   const result = await query(
-    'INSERT INTO chat_sessions (mode) VALUES ($1) RETURNING id',
-    [mode]
+    'INSERT INTO chat_sessions (user_id, mode) VALUES ($1, $2) RETURNING id',
+    [userId, mode]
   );
   return result.rows[0].id;
 }

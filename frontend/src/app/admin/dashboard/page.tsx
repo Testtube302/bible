@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnalyticsCards } from '@/components/admin/AnalyticsCards';
+import { UserTable } from '@/components/admin/UserTable';
+import { UserFormModal, ResetPasswordModal } from '@/components/admin/UserFormModal';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useAdmin } from '@/hooks/useAdmin';
@@ -28,14 +30,34 @@ interface PopularBook {
   chaptersRead: number;
 }
 
+interface AdminUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function AdminDashboardPage() {
-  const { isAuthenticated, checkAuth, logout } = useAdmin();
+  const {
+    isAuthenticated, checkAuth, logout,
+    fetchUsers, createUser, updateUser, deleteUser, resetPassword,
+  } = useAdmin();
   const router = useRouter();
 
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
   const [topSearches, setTopSearches] = useState<TopSearch[]>([]);
   const [popularBooks, setPopularBooks] = useState<PopularBook[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Modal state
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [showResetPw, setShowResetPw] = useState(false);
+  const [resetPwUser, setResetPwUser] = useState<AdminUser | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -52,14 +74,16 @@ export default function AdminDashboardPage() {
 
     async function fetchData() {
       try {
-        const [summary, searches, books] = await Promise.all([
+        const [summary, searches, books, userList] = await Promise.all([
           api.get<AnalyticsSummary>('/admin/analytics/summary'),
           api.get<{ searches: TopSearch[] }>('/admin/analytics/searches'),
           api.get<{ books: PopularBook[] }>('/admin/analytics/popular-books'),
+          fetchUsers(),
         ]);
         setAnalytics(summary);
         setTopSearches(searches.searches);
         setPopularBooks(books.books);
+        setUsers(userList);
       } catch (err) {
         console.error('Failed to fetch analytics:', err);
       } finally {
@@ -67,11 +91,71 @@ export default function AdminDashboardPage() {
       }
     }
     fetchData();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchUsers]);
 
   const handleLogout = async () => {
     await logout();
     router.push('/admin');
+  };
+
+  const handleAddUser = () => {
+    setEditingUser(null);
+    setFormError(null);
+    setShowUserForm(true);
+  };
+
+  const handleEditUser = (user: AdminUser) => {
+    setEditingUser(user);
+    setFormError(null);
+    setShowUserForm(true);
+  };
+
+  const handleUserFormSubmit = async (data: {
+    email: string;
+    password?: string;
+    displayName: string;
+    role: string;
+  }) => {
+    setFormError(null);
+    try {
+      if (editingUser) {
+        const updated = await updateUser(editingUser.id, {
+          email: data.email,
+          displayName: data.displayName,
+          role: data.role,
+        });
+        setUsers(prev => prev.map(u => u.id === editingUser.id ? updated : u));
+      } else {
+        const created = await createUser(data.email, data.password!, data.displayName, data.role);
+        setUsers(prev => [created, ...prev]);
+      }
+      setShowUserForm(false);
+    } catch (err: any) {
+      setFormError(err.message ?? 'Failed to save user');
+    }
+  };
+
+  const handleResetPassword = (user: AdminUser) => {
+    setResetPwUser(user);
+    setShowResetPw(true);
+  };
+
+  const handleResetPasswordSubmit = async (password: string) => {
+    if (!resetPwUser) return;
+    await resetPassword(resetPwUser.id, password);
+    setShowResetPw(false);
+  };
+
+  const handleDeleteUser = async (user: AdminUser) => {
+    if (!confirm(`Delete user "${user.displayName}" (${user.email})? This will permanently remove all their data.`)) {
+      return;
+    }
+    try {
+      await deleteUser(user.id);
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+    } catch (err: any) {
+      alert(err.message ?? 'Failed to delete user');
+    }
   };
 
   if (!isAuthenticated) return null;
@@ -99,6 +183,22 @@ export default function AdminDashboardPage() {
             <section>
               <h2 className="text-dark-text font-semibold mb-4">Overview</h2>
               <AnalyticsCards data={analytics} />
+            </section>
+
+            {/* Users */}
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-dark-text font-semibold">Users</h2>
+                <Button size="sm" onClick={handleAddUser}>Add User</Button>
+              </div>
+              <div className="bg-dark-card border border-dark-border rounded-xl overflow-hidden">
+                <UserTable
+                  users={users}
+                  onEdit={handleEditUser}
+                  onResetPassword={handleResetPassword}
+                  onDelete={handleDeleteUser}
+                />
+              </div>
             </section>
 
             {/* Top Searches */}
@@ -157,6 +257,21 @@ export default function AdminDashboardPage() {
           </>
         )}
       </main>
+
+      {/* Modals */}
+      <UserFormModal
+        isOpen={showUserForm}
+        onClose={() => setShowUserForm(false)}
+        onSubmit={handleUserFormSubmit}
+        user={editingUser}
+        error={formError}
+      />
+      <ResetPasswordModal
+        isOpen={showResetPw}
+        onClose={() => setShowResetPw(false)}
+        onSubmit={handleResetPasswordSubmit}
+        userName={resetPwUser?.displayName}
+      />
     </div>
   );
 }

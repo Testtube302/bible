@@ -2,15 +2,37 @@ import type { FastifyInstance } from 'fastify';
 import * as chatService from '../services/chat.service.js';
 import * as ragService from '../services/rag.service.js';
 import { query } from '../db/postgres.js';
+import { validateSession } from '../services/user.service.js';
 import type { ClientChatMessage } from '../types/chat.js';
 
 const MAX_MESSAGES_PER_MINUTE = 10;
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/chat', { websocket: true }, (socket, request) => {
+  app.get('/chat', { websocket: true }, async (socket, request) => {
     const messageTimestamps: number[] = [];
 
-    app.log.info('WebSocket client connected');
+    // Authenticate via user_session cookie
+    const token = request.cookies.user_session;
+    let userId: string | null = null;
+
+    if (token) {
+      const session = await validateSession(token);
+      if (session) {
+        userId = session.userId;
+      }
+    }
+
+    if (!userId) {
+      socket.send(JSON.stringify({
+        type: 'error',
+        message: 'Authentication required. Please sign in.',
+        code: 'AUTH_REQUIRED',
+      }));
+      socket.close();
+      return;
+    }
+
+    app.log.info('WebSocket client connected (userId: %s)', userId);
 
     // Keepalive ping every 30s to prevent Apache proxy timeout
     const pingInterval = setInterval(() => {
@@ -50,7 +72,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
         }
 
         // Get or create session
-        const sessionId = message.sessionId || await chatService.createSession(message.mode);
+        const sessionId = message.sessionId || await chatService.createSession(userId!, message.mode);
         socket.send(JSON.stringify({ type: 'session', sessionId }));
 
         // Save user message

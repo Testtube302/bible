@@ -15,8 +15,12 @@ export function useHighlights() {
         `/highlights/${encodeURIComponent(bookName)}/${chapter}`
       );
       setHighlights(data.highlights);
-    } catch (err) {
-      console.error('Failed to fetch highlights:', err);
+    } catch (err: any) {
+      if (err.message?.includes('401')) {
+        setHighlights([]);
+      } else {
+        console.error('Failed to fetch highlights:', err);
+      }
     } finally {
       setLoading(false);
     }

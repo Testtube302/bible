@@ -1,9 +1,10 @@
 import { query } from '../db/postgres.js';
 import type { Bookmark } from '../types/user.js';
 
-export async function getAllBookmarks(): Promise<Bookmark[]> {
+export async function getAllBookmarks(userId: string): Promise<Bookmark[]> {
   const result = await query(
-    'SELECT id, book_name, chapter, verse, translation, note, created_at FROM bookmarks ORDER BY created_at DESC'
+    'SELECT id, book_name, chapter, verse, translation, note, created_at FROM bookmarks WHERE user_id = $1 ORDER BY created_at DESC',
+    [userId]
   );
   return result.rows.map(row => ({
     id: row.id,
@@ -17,6 +18,7 @@ export async function getAllBookmarks(): Promise<Bookmark[]> {
 }
 
 export async function createBookmark(
+  userId: string,
   bookName: string,
   chapter: number,
   verse: number,
@@ -24,11 +26,11 @@ export async function createBookmark(
   note?: string
 ): Promise<Bookmark> {
   const result = await query(
-    `INSERT INTO bookmarks (book_name, chapter, verse, translation, note)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (book_name, chapter, verse, translation) DO UPDATE SET note = COALESCE($5, bookmarks.note)
+    `INSERT INTO bookmarks (user_id, book_name, chapter, verse, translation, note)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (user_id, book_name, chapter, verse, translation) DO UPDATE SET note = COALESCE($6, bookmarks.note)
      RETURNING id, book_name, chapter, verse, translation, note, created_at`,
-    [bookName, chapter, verse, translation, note ?? null]
+    [userId, bookName, chapter, verse, translation, note ?? null]
   );
   const row = result.rows[0];
   return {
@@ -42,7 +44,7 @@ export async function createBookmark(
   };
 }
 
-export async function deleteBookmark(id: string): Promise<boolean> {
-  const result = await query('DELETE FROM bookmarks WHERE id = $1', [id]);
+export async function deleteBookmark(userId: string, id: string): Promise<boolean> {
+  const result = await query('DELETE FROM bookmarks WHERE id = $1 AND user_id = $2', [id, userId]);
   return (result.rowCount ?? 0) > 0;
 }

@@ -36,13 +36,21 @@ export interface JourneyProgress {
   completed: boolean;
 }
 
-export async function getAllJourneys(): Promise<(Journey & { progress: JourneyProgress | null })[]> {
-  const result = await query(
-    `SELECT j.*, jp.current_passage, jp.completed
-     FROM journeys j
-     LEFT JOIN journey_progress jp ON jp.journey_id = j.id
-     ORDER BY j.sort_order`
-  );
+export async function getAllJourneys(userId?: string | null): Promise<(Journey & { progress: JourneyProgress | null })[]> {
+  let sql = `
+    SELECT j.*, jp.current_passage, jp.completed
+    FROM journeys j
+    LEFT JOIN journey_progress jp ON jp.journey_id = j.id`;
+
+  const params: any[] = [];
+  if (userId) {
+    sql += ' AND jp.user_id = $1';
+    params.push(userId);
+  }
+
+  sql += ' ORDER BY j.sort_order';
+
+  const result = await query(sql, params);
 
   return result.rows.map(row => ({
     id: row.id,
@@ -59,14 +67,24 @@ export async function getAllJourneys(): Promise<(Journey & { progress: JourneyPr
   }));
 }
 
-export async function getJourney(slug: string): Promise<(Journey & { progress: JourneyProgress | null; content: JourneyContent[] }) | null> {
-  const journeyResult = await query(
-    `SELECT j.*, jp.current_passage, jp.completed
-     FROM journeys j
-     LEFT JOIN journey_progress jp ON jp.journey_id = j.id
-     WHERE j.slug = $1`,
-    [slug]
-  );
+export async function getJourney(slug: string, userId?: string | null): Promise<(Journey & { progress: JourneyProgress | null; content: JourneyContent[] }) | null> {
+  let sql = `
+    SELECT j.*, jp.current_passage, jp.completed
+    FROM journeys j
+    LEFT JOIN journey_progress jp ON jp.journey_id = j.id`;
+
+  const params: any[] = [];
+  let idx = 1;
+
+  if (userId) {
+    sql += ` AND jp.user_id = $${idx++}`;
+    params.push(userId);
+  }
+
+  sql += ` WHERE j.slug = $${idx++}`;
+  params.push(slug);
+
+  const journeyResult = await query(sql, params);
 
   if (journeyResult.rows.length === 0) return null;
 
@@ -104,7 +122,7 @@ function formatPassage(p: JourneyPassage): string {
   return `${p.book} ${p.chapter}:${p.verseStart}-${p.verseEnd}`;
 }
 
-export async function generateJourneyContent(journeyId: string): Promise<void> {
+export async function generateJourneyContent(journeyId: string, userId: string): Promise<void> {
   // Check if content already exists
   const existing = await query(
     'SELECT COUNT(*) as count FROM journey_content WHERE journey_id = $1',
@@ -176,16 +194,16 @@ export async function generateJourneyContent(journeyId: string): Promise<void> {
     );
   }
 
-  // Initialize progress
+  // Initialize progress for this user
   await query(
-    `INSERT INTO journey_progress (journey_id, current_passage)
-     VALUES ($1, 0)
-     ON CONFLICT (journey_id) DO NOTHING`,
-    [journeyId]
+    `INSERT INTO journey_progress (user_id, journey_id, current_passage)
+     VALUES ($1, $2, 0)
+     ON CONFLICT (user_id, journey_id) DO NOTHING`,
+    [userId, journeyId]
   );
 }
 
-export async function updateProgress(slug: string, currentPassage: number): Promise<void> {
+export async function updateProgress(userId: string, slug: string, currentPassage: number): Promise<void> {
   const journeyResult = await query('SELECT id, passages FROM journeys WHERE slug = $1', [slug]);
   if (journeyResult.rows.length === 0) throw new Error('Journey not found');
 
@@ -194,9 +212,9 @@ export async function updateProgress(slug: string, currentPassage: number): Prom
   const completed = currentPassage >= passages.length - 1;
 
   await query(
-    `INSERT INTO journey_progress (journey_id, current_passage, completed, updated_at)
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (journey_id) DO UPDATE SET current_passage = $2, completed = $3, updated_at = NOW()`,
-    [journey.id, currentPassage, completed]
+    `INSERT INTO journey_progress (user_id, journey_id, current_passage, completed, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (user_id, journey_id) DO UPDATE SET current_passage = $3, completed = $4, updated_at = NOW()`,
+    [userId, journey.id, currentPassage, completed]
   );
 }

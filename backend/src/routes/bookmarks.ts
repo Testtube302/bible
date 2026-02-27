@@ -2,8 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import * as bookmarkService from '../services/bookmark.service.js';
 
 export async function bookmarkRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/bookmarks', async () => {
-    const bookmarks = await bookmarkService.getAllBookmarks();
+  app.get('/bookmarks', {
+    preHandler: [app.authenticateUser],
+  }, async (request) => {
+    const bookmarks = await bookmarkService.getAllBookmarks(request.userId!);
     return { bookmarks };
   });
 
@@ -15,7 +17,9 @@ export async function bookmarkRoutes(app: FastifyInstance): Promise<void> {
       translation?: string;
       note?: string;
     };
-  }>('/bookmarks', async (request, reply) => {
+  }>('/bookmarks', {
+    preHandler: [app.authenticateUser],
+  }, async (request, reply) => {
     const { book_name, chapter, verse, translation, note } = request.body;
 
     if (!book_name || !chapter || !verse) {
@@ -23,13 +27,15 @@ export async function bookmarkRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const bookmark = await bookmarkService.createBookmark(
-      book_name, chapter, verse, translation ?? 'KJV', note
+      request.userId!, book_name, chapter, verse, translation ?? 'KJV', note
     );
     return reply.status(201).send({ bookmark });
   });
 
-  app.delete<{ Params: { id: string } }>('/bookmarks/:id', async (request, reply) => {
-    const deleted = await bookmarkService.deleteBookmark(request.params.id);
+  app.delete<{ Params: { id: string } }>('/bookmarks/:id', {
+    preHandler: [app.authenticateUser],
+  }, async (request, reply) => {
+    const deleted = await bookmarkService.deleteBookmark(request.userId!, request.params.id);
     if (!deleted) {
       return reply.status(404).send({ error: 'Bookmark not found' });
     }
