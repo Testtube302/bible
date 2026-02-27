@@ -65,7 +65,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (isAuthenticated === false) {
-      router.push('/admin');
+      router.replace('/admin');
     }
   }, [isAuthenticated, router]);
 
@@ -158,7 +158,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  if (!isAuthenticated) return null;
+  if (isAuthenticated !== true) return null;
 
   return (
     <div className="min-h-screen bg-dark-bg">

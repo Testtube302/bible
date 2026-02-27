@@ -23,6 +23,25 @@ function getModePrompt(mode: ChatMode): string {
   }
 }
 
+// Parse explicit verse references like "Galatians 4:4", "1 John 3:16", "Genesis 1:1-3"
+function parseVerseReferences(text: string): Array<{ book: string; chapter: number; verses: number[] }> {
+  const pattern = /(\d?\s?[A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s+(\d+):(\d+)(?:-(\d+))?/g;
+  const refs: Array<{ book: string; chapter: number; verses: number[] }> = [];
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const book = match[1].trim();
+    const chapter = parseInt(match[2], 10);
+    const startVerse = parseInt(match[3], 10);
+    const endVerse = match[4] ? parseInt(match[4], 10) : startVerse;
+    const verses: number[] = [];
+    for (let v = startVerse; v <= Math.min(endVerse, startVerse + 10); v++) {
+      verses.push(v);
+    }
+    refs.push({ book, chapter, verses });
+  }
+  return refs;
+}
+
 export async function retrieveSources(
   userMessage: string,
   verseContext?: VerseContext
@@ -68,6 +87,37 @@ export async function retrieveSources(
       }
     } catch {
       // specific verse not found
+    }
+  }
+
+  // Parse explicit verse references from the user's message and fetch them directly
+  const explicitRefs = parseVerseReferences(userMessage);
+  for (const ref of explicitRefs) {
+    const idsToFetch = ref.verses.map(
+      v => `KJV_${ref.book.replace(/\s+/g, '_')}_${ref.chapter}_${v}`
+    );
+    try {
+      const explicit = await versesCollection.get({ ids: idsToFetch });
+      if (explicit.documents) {
+        for (let i = 0; i < explicit.documents.length; i++) {
+          if (!explicit.documents[i]) continue;
+          const meta = explicit.metadatas?.[i] as Record<string, any> | undefined;
+          const alreadyExists = verses.some(
+            v => v.book === ref.book && v.chapter === ref.chapter && v.verse === ref.verses[i]
+          );
+          if (!alreadyExists) {
+            verses.unshift({
+              book: ref.book,
+              chapter: ref.chapter,
+              verse: ref.verses[i],
+              text: explicit.documents[i]!,
+              translation: (meta?.translation as string) ?? 'KJV',
+            });
+          }
+        }
+      }
+    } catch {
+      // verse not found in ChromaDB
     }
   }
 
